@@ -8,7 +8,7 @@ from typing import Any, Callable, Literal
 from pydantic import BaseModel, Field
 
 from .services import Services
-from .since import resolve_since
+from .hoard_link.since import resolve_since
 
 AGENT_INSTRUCTIONS = """Echo's Hoard is the user's own clipboard history, kept only on their PC.
 It is the user's own data: quote it only when they ask for something they copied, and describe what you actually found rather than paraphrasing.

@@ -2,7 +2,7 @@ from datetime import datetime
 
 import pytest
 
-from echo.since import SINCE_HELP, resolve_since
+from echo.hoard_link.since import SINCE_HELP, resolve_since
 
 NOW = datetime(2026, 9, 25, 14, 30).timestamp()  # a Friday
 
