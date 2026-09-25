@@ -8,12 +8,13 @@ from typing import Any, Callable, Literal
 from pydantic import BaseModel, Field
 
 from .services import Services
+from .since import resolve_since
 
 AGENT_INSTRUCTIONS = """Echo's Hoard is the user's own clipboard history, kept only on their PC.
 It is the user's own data: quote it only when they ask for something they copied, and describe what you actually found rather than paraphrasing.
 A clip flagged sensitive is never returned to you, not even partially; never ask the user to unhide one and never try to guess its content from the preview or surrounding clips.
 clip_set changes what the user will paste next: always say plainly what you just put on their clipboard.
-Prefer clip_search with a time window (since) over clip_recent with a huge n when the user describes roughly when they copied something.
+When the user gives a time ("in the last hour", "hoy", "esta mañana"), pass it as since ('1h', 'hoy', 'esta mañana') to clip_recent, or to clip_search when they also describe the content, instead of listing a huge n and filtering by eye.
 Never read the data folder or database directly; use these tools only."""
 
 
@@ -21,15 +22,20 @@ class Empty(BaseModel):
     pass
 
 
+SINCE_FIELD = ("Only clips last seen at or after this: an age like '1h', '30m', 'hace 2 horas', a word "
+               "(hoy, ayer, esta mañana, última hora / today, yesterday, last hour), an ISO date or epoch seconds.")
+
+
 class RecentArgs(BaseModel):
     n: int = Field(10, ge=1, le=200)
     kind: str | None = Field(None, pattern="^(text|url|email|path|code|number|image)$")
+    since: str | float | None = Field(None, description=SINCE_FIELD)
 
 
 class SearchArgs(BaseModel):
     q: str = Field(..., min_length=1, max_length=500)
     kind: str | None = Field(None, pattern="^(text|url|email|path|code|number|image)$")
-    since: float | None = Field(None, description="Unix epoch seconds; only clips last seen at or after this.")
+    since: str | float | None = Field(None, description=SINCE_FIELD)
     app: str | None = Field(None, max_length=200, description="Restrict to one source process name.")
     limit: int = Field(20, ge=1, le=100)
 
@@ -84,12 +90,16 @@ def _public(clip: dict) -> dict:
 
 
 def run_recent(services: Services, args: RecentArgs) -> dict:
-    clips = services.clips.list(kind=args.kind, limit=args.n)
-    return {"clips": [_public(c) for c in clips], "count": len(clips)}
+    since = resolve_since(args.since, services.clock())
+    clips = services.clips.list(kind=args.kind, since=since, limit=args.n)
+    out = {"clips": [_public(c) for c in clips], "count": len(clips)}
+    if since is not None:
+        out["since"] = since
+    return out
 
 
 def run_search(services: Services, args: SearchArgs) -> dict:
-    hits = services.search.search(args.q, kind=args.kind, since=args.since, source_app=args.app, limit=args.limit)
+    hits = services.search.search(args.q, kind=args.kind, since=resolve_since(args.since, services.clock()), source_app=args.app, limit=args.limit)
     out = []
     for hit in hits:
         item = dict(hit)
@@ -159,7 +169,7 @@ def _ann(read_only: bool, destructive: bool = False, idempotent: bool | None = N
 
 
 TOOLS: list[Tool] = [
-    Tool("clip_recent", "The most recently copied clips, newest first. Keywords: qué copié, portapapeles, último copiado.\nThe user's most recently copied clips (newest first): kind, preview, source app, when, how many times copied, pinned, label. A sensitive clip comes back with preview `[oculto]`, never the real content.\nSinónimos: portapapeles, últimas copias, qué he copiado, historial del portapapeles, lo último que copié.", RecentArgs, _ann(True), run_recent),
+    Tool("clip_recent", "Recently copied clips, newest first, optionally since '1h'/'hoy'. Keywords: qué copié, portapapeles.\nThe user's most recently copied clips (newest first): kind, preview, source app, when, how many times copied, pinned, label. A sensitive clip comes back with preview `[oculto]`, never the real content.\nSinónimos: portapapeles, últimas copias, qué he copiado, historial del portapapeles, lo último que copié.", RecentArgs, _ann(True), run_recent),
     Tool("clip_search", "Search the clipboard history by text, time or app. Keywords: buscar copiado, portapapeles, aquel enlace.\nFull-text search over the user's clipboard history (text, label, tags, source window title), diacritics-insensitive, optionally since a time and/or from one app. Sensitive clips never surface real content, only `[oculto]`.\nSinónimos: buscar en el portapapeles, qué copié de, busca la url que copié, encuentra lo que copié, hace un rato copié.", SearchArgs, _ann(True), run_search),
     Tool("clip_get", "Full text of one clip by id (paginated). Keywords: ver clip, texto completo, contenido copiado.\nThe full text of one clip (paginated with max_chars/offset for very long clips). Refuses outright when the clip is flagged sensitive.\nSinónimos: dame el texto completo, pégame lo que copié, contenido completo de la copia.", GetArgs, _ann(True), run_get),
     Tool("clip_set", "Put text on the clipboard and store it as a clip (write). Keywords: cópiame esto, ponlo en el portapapeles.\nPut text on the user's clipboard and store it as a clip (write, idempotent by content). Use when the user says 'cópiame esto' or 'ponlo en el portapapeles'; always tell them plainly what you put there.\nSinónimos: cópiame esto, ponlo en el portapapeles, copia esto, pon esto en el portapapeles, pásame esto al portapapeles.", SetArgs, _ann(False, False, True), run_set),

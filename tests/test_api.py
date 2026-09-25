@@ -180,3 +180,15 @@ def test_agent_clip_copy_refuses_sensitive_without_allow_flag(client):
     allowed = client.post("/api/agent/call", json={"name": "clip_copy", "arguments": {"id": clip["id"], "allow_sensitive": True}}, headers=auth)
     assert allowed.status_code == 200
     assert allowed.json()["ok"] is True
+
+
+def test_agent_since_accepts_human_windows(client):
+    client.post("/api/clips", json={"text": "Copiado hace un momento"})
+    auth = {"Authorization": f"Bearer {client.services.token}"}
+    call = lambda name, args: client.post("/api/agent/call", json={"name": name, "arguments": args}, headers=auth)  # noqa: E731
+    fresh = call("clip_recent", {"n": 10, "since": "1h"}).json()
+    assert fresh["count"] >= 1 and "since" in fresh
+    assert call("clip_recent", {"n": 10, "since": "2999-01-01"}).json()["count"] == 0
+    assert call("clip_search", {"q": "momento", "since": "hoy"}).json()["count"] >= 1
+    bad = call("clip_recent", {"since": "cuando sea"})
+    assert bad.status_code == 400 and "since accepts" in bad.text
