@@ -78,6 +78,7 @@ All JSON; errors are `{ "error": "..." }`.
 | `clip_recent` | The most recently copied clips. Sensitive ones come back as `[oculto]`. |
 | `clip_search` | Full-text search over the clipboard history. |
 | `clip_get` | The full text of one clip (paginated); refuses sensitive clips outright. |
+| `clip_bundle` | Read up to 20 selected clips together, in order, with source and date for a comparison or summary in Faustus. |
 | `clip_set` | Put text on the clipboard and store it as a clip (write, idempotent by content). |
 | `clip_copy` | Put an existing clip back on the clipboard (write; refuses sensitive unless `allow_sensitive`, and even then never returns the content). |
 | `clip_pin` | Pin/unpin and set label/tags (write). |

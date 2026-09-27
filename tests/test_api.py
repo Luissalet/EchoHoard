@@ -113,7 +113,7 @@ def test_search_endpoint(client):
 def test_agent_tools_and_auth(client):
     catalog = client.get("/api/agent/tools").json()
     names = [t["name"] for t in catalog["tools"]]
-    assert names == ["clip_recent", "clip_search", "clip_get", "clip_set", "clip_copy", "clip_pin",
+    assert names == ["clip_recent", "clip_search", "clip_get", "clip_bundle", "clip_set", "clip_copy", "clip_pin",
                       "clip_delete", "clip_status", "clip_capture"]
     for tool in catalog["tools"]:
         assert "Sinónimos:" in tool["description"] and tool["inputSchema"]["type"] == "object"
@@ -168,6 +168,26 @@ def test_agent_clip_get_refuses_sensitive_content(client):
     recent = client.post("/api/agent/call", json={"name": "clip_recent", "arguments": {"n": 5}}, headers=auth).json()
     hit = next(c for c in recent["clips"] if c["id"] == clip["id"])
     assert hit["preview"] == "[oculto]"
+
+
+def test_agent_clip_bundle_keeps_order_text_and_origin(client):
+    svc = client.services
+    first = svc.clips.capture_text("Primera fuente: 12 ventas", source_app="browser", source_title="Ventas", now=svc.now())
+    second = svc.clips.capture_text("Segunda fuente: 7 devoluciones", source_app="notes", source_title="Resumen", now=svc.now())
+    auth = {"Authorization": f"Bearer {svc.token}"}
+    def bundle(ids, **extra):
+        return client.post("/api/agent/call", json={"name": "clip_bundle", "arguments": {"ids": ids, **extra}}, headers=auth)
+    result = bundle([second["id"], first["id"]], max_chars_per_clip=15)
+    assert result.status_code == 200
+    clips = result.json()["clips"]
+    assert [c["id"] for c in clips] == [second["id"], first["id"]]
+    assert clips[0]["text"] == "Segunda fuente:"
+    assert clips[0]["truncated"] is True
+    assert clips[0]["source_app"] == "notes" and clips[0]["source_title"] == "Resumen"
+    assert clips[1]["last_seen_at"]
+    assert bundle([first["id"], 999999]).status_code == 404
+    secret = svc.clips.capture_text("AKIAABCDEFGHIJKLMNOP", source_app="terminal", source_title="", now=svc.now())
+    assert bundle([first["id"], secret["id"]]).status_code == 403
 
 
 def test_agent_clip_copy_refuses_sensitive_without_allow_flag(client):

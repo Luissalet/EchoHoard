@@ -15,6 +15,7 @@ It is the user's own data: quote it only when they ask for something they copied
 A clip flagged sensitive is never returned to you, not even partially; never ask the user to unhide one and never try to guess its content from the preview or surrounding clips.
 clip_set changes what the user will paste next: always say plainly what you just put on their clipboard.
 When the user gives a time ("in the last hour", "hoy", "esta mañana"), pass it as since ('1h', 'hoy', 'esta mañana') to clip_recent, or to clip_search when they also describe the content, instead of listing a huge n and filtering by eye.
+When the user selects several clip IDs to compare or summarise, use clip_bundle once to get their texts and origins together.
 Never read the data folder or database directly; use these tools only."""
 
 
@@ -44,6 +45,11 @@ class GetArgs(BaseModel):
     id: int = Field(..., ge=1, description="Clip id, as returned by clip_recent or clip_search.")
     max_chars: int = Field(8000, ge=1, le=50_000)
     offset: int = Field(0, ge=0)
+
+
+class BundleArgs(BaseModel):
+    ids: list[int] = Field(..., min_length=1, max_length=20, description="Clip IDs in the order the user wants to compare or summarise.")
+    max_chars_per_clip: int = Field(8000, ge=1, le=20_000)
 
 
 class SetArgs(BaseModel):
@@ -125,6 +131,27 @@ def run_get(services: Services, args: GetArgs) -> dict:
             "source_app": clip["source_app"], "last_seen_at": clip["last_seen_at"]}
 
 
+def run_bundle(services: Services, args: BundleArgs) -> dict:
+    """Collect selected clips with their origins for one comparison or summary."""
+    if len(set(args.ids)) != len(args.ids):
+        raise ValueError("Pass each clip ID once.")
+    clips = []
+    for clip_id in args.ids:
+        clip = services.clips.get(clip_id)
+        if clip is None:
+            raise LookupError(f"Clip {clip_id} does not exist.")
+        if clip["sensitive"]:
+            raise PermissionError(f"Clip {clip_id} is hidden content; it cannot be included.")
+        text = clip["text"][:args.max_chars_per_clip]
+        clips.append({
+            "id": clip_id, "kind": clip["kind"], "text": text,
+            "chars": clip["chars"], "truncated": len(text) < clip["chars"],
+            "source_app": clip["source_app"], "source_title": clip["source_title"],
+            "last_seen_at": clip["last_seen_at"], "label": clip["label"],
+        })
+    return {"clips": clips, "count": len(clips)}
+
+
 def run_set(services: Services, args: SetArgs) -> dict:
     clip = services.set_clipboard_text(args.text)
     return {"ok": True, "clip": _public(clip)}
@@ -172,6 +199,7 @@ TOOLS: list[Tool] = [
     Tool("clip_recent", "Recently copied clips, newest first, optionally since '1h'/'hoy'. Keywords: qué copié, portapapeles.\nThe user's most recently copied clips (newest first): kind, preview, source app, when, how many times copied, pinned, label. A sensitive clip comes back with preview `[oculto]`, never the real content.\nSinónimos: portapapeles, últimas copias, qué he copiado, historial del portapapeles, lo último que copié.", RecentArgs, _ann(True), run_recent),
     Tool("clip_search", "Search the clipboard history by text, time or app. Keywords: buscar copiado, portapapeles, aquel enlace.\nFull-text search over the user's clipboard history (text, label, tags, source window title), diacritics-insensitive, optionally since a time and/or from one app. Sensitive clips never surface real content, only `[oculto]`.\nSinónimos: buscar en el portapapeles, qué copié de, busca la url que copié, encuentra lo que copié, hace un rato copié.", SearchArgs, _ann(True), run_search),
     Tool("clip_get", "Full text of one clip by id (paginated). Keywords: ver clip, texto completo, contenido copiado.\nThe full text of one clip (paginated with max_chars/offset for very long clips). Refuses outright when the clip is flagged sensitive.\nSinónimos: dame el texto completo, pégame lo que copié, contenido completo de la copia.", GetArgs, _ann(True), run_get),
+    Tool("clip_bundle", "Read selected clips together with source and date. Keywords: compare clips, comparar recortes.\nPass IDs from clip_recent or clip_search; returns their texts in the requested order with source app, window title and timestamp, ready to compare or summarise in one chat turn. Each text may be truncated; use clip_get with an offset for the rest.\nSinónimos: compara estas copias, resume estos enlaces, junta estos recortes, analiza estos clips.", BundleArgs, _ann(True), run_bundle),
     Tool("clip_set", "Put text on the clipboard and store it as a clip (write). Keywords: cópiame esto, ponlo en el portapapeles.\nPut text on the user's clipboard and store it as a clip (write, idempotent by content). Use when the user says 'cópiame esto' or 'ponlo en el portapapeles'; always tell them plainly what you put there.\nSinónimos: cópiame esto, ponlo en el portapapeles, copia esto, pon esto en el portapapeles, pásame esto al portapapeles.", SetArgs, _ann(False, False, True), run_set),
     Tool("clip_copy", "Put an existing clip back on the clipboard by id (write). Keywords: vuelve a copiar, recuperar clip.\nPut an existing clip back on the user's clipboard by id (write). Refuses a sensitive clip unless `allow_sensitive` is true, and even then never returns the content to you.\nSinónimos: pégame el anterior, vuelve a copiar esto, copia ese de nuevo, recupera esa copia, ponlo otra vez en el portapapeles.", CopyArgs, _ann(False, False, True), run_copy),
     Tool("clip_pin", "Pin or unpin a clip and optionally set its label/tags (write). Only when the user asks.\nSinónimos: fija esta copia, guarda esto, marca como favorito, etiqueta esta copia, quita de fijados.", PinArgs, _ann(False, False, True), run_pin),
