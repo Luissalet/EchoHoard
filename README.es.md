@@ -6,7 +6,7 @@ Todo se queda en la máquina: SQLite para el historial, ficheros PNG para las im
 
 ## Qué hace
 
-- **Copias** = lo que copias: texto, o una imagen (guardada como PNG, con un texto de relleno sin OCR como «[imagen 1254×1254]»). Cada copia guarda su tipo, una vista previa de una línea, la aplicación/ventana de origen cuando se conoce, cuándo se vio por primera y última vez, cuántas veces se ha copiado lo mismo, si está fijada, etiqueta y tags.
+- **Copias** = lo que copias: texto, o una imagen guardada como PNG. Con el OCR local opcional, el texto de la imagen se puede buscar y consultar desde Faustus, marcado como texto derivado; sin OCR se conserva un marcador como «[imagen 1254×1254]». Cada copia guarda su tipo, vista previa, aplicación/ventana de origen, fechas, repeticiones, fijado, etiqueta y tags.
 - **Sin duplicados**: copiar lo mismo otra vez actualiza `last_seen_at`/`times` de la copia existente en vez de crear una nueva.
 - **Detección de tipo**: URL, correo, ruta, código, número, imagen o texto — a partir solo del contenido (`echo/detect.py`).
 - **Contenido sensible** (la privacidad ante todo): una copia que parece una contraseña, una clave de API, un número de tarjeta (verificado con Luhn) o un IBAN se marca `sensitive` y su contenido real se sustituye por un texto como `[oculto: contraseña]` **antes de llegar a la base de datos** — no se oculta solo en la interfaz, nunca se guarda. El asistente no lo recibe nunca, ni siquiera parcialmente. Una lista de exclusión por aplicación (`ECHO_EXCLUDE_APPS`, por defecto `KeePass,1Password,Bitwarden,keepassxc`) evita capturar nada de los gestores de contraseñas. Un interruptor de pausa detiene la captura (interfaz + herramienta).
@@ -47,6 +47,8 @@ Abre http://127.0.0.1:5188, entra en **Historial** para ver y buscar lo que has 
 | `ECHO_RETENTION_DAYS` | `30` | Las copias sin fijar más antiguas se purgan; `0` las conserva para siempre. |
 | `ECHO_MAX_CLIPS` | `5000` | Límite de copias sin fijar; se eliminan antes las más antiguas. |
 | `ECHO_MAX_IMAGE_MB` | `200` | Límite de espacio total en imágenes; se eliminan antes las más antiguas. |
+| `ECHO_OCR_ENABLED` | `0` | Pon `1` para reconocer el texto de las imágenes nuevas con Tesseract local. Requiere `tesseract` en PATH; las imágenes se guardan aunque falte o falle. |
+| `ECHO_OCR_LANG` | `eng` | Paquetes de idioma de Tesseract, por ejemplo `eng+spa`. |
 | `ECHO_EXCLUDE_APPS` | `KeePass,1Password,Bitwarden,keepassxc` | Nombres de proceso, separados por comas, que nunca se capturan. |
 | `ECHO_ALLOWED_HOSTS` | | Nombres de host adicionales aceptados detrás de un túnel. |
 

@@ -182,7 +182,7 @@ def run_delete(services: Services, args: DeleteArgs) -> dict:
 def run_status(services: Services, _: Empty) -> dict:
     s = services.status()
     keep = ("watching", "paused", "backend", "clips_count", "pinned_count", "sensitive_count", "images_bytes",
-            "last_capture_at", "retention_days", "max_clips", "max_image_mb", "exclude_apps")
+            "last_capture_at", "retention_days", "max_clips", "max_image_mb", "ocr_enabled", "ocr_available", "exclude_apps")
     return {k: s[k] for k in keep}
 
 
@@ -197,7 +197,7 @@ def _ann(read_only: bool, destructive: bool = False, idempotent: bool | None = N
 
 TOOLS: list[Tool] = [
     Tool("clip_recent", "Recently copied clips, newest first, optionally since '1h'/'hoy'. Keywords: qué copié, portapapeles.\nThe user's most recently copied clips (newest first): kind, preview, source app, when, how many times copied, pinned, label. A sensitive clip comes back with preview `[oculto]`, never the real content.\nSinónimos: portapapeles, últimas copias, qué he copiado, historial del portapapeles, lo último que copié.", RecentArgs, _ann(True), run_recent),
-    Tool("clip_search", "Search the clipboard history by text, time or app. Keywords: buscar copiado, portapapeles, aquel enlace.\nFull-text search over the user's clipboard history (text, label, tags, source window title), diacritics-insensitive, optionally since a time and/or from one app. Sensitive clips never surface real content, only `[oculto]`.\nSinónimos: buscar en el portapapeles, qué copié de, busca la url que copié, encuentra lo que copié, hace un rato copié.", SearchArgs, _ann(True), run_search),
+    Tool("clip_search", "Search copied text and image OCR. Keywords: buscar copiado, texto en captura.\nFull-text search over clipboard history (text, optional image OCR, label, tags, source window title), diacritics-insensitive. OCR is derived and may contain recognition mistakes. Sensitive clips never surface real content, only `[oculto]`.\nSinónimos: buscar en el portapapeles, texto de imagen copiada, busca la url que copié.", SearchArgs, _ann(True), run_search),
     Tool("clip_get", "Full text of one clip by id (paginated). Keywords: ver clip, texto completo, contenido copiado.\nThe full text of one clip (paginated with max_chars/offset for very long clips). Refuses outright when the clip is flagged sensitive.\nSinónimos: dame el texto completo, pégame lo que copié, contenido completo de la copia.", GetArgs, _ann(True), run_get),
     Tool("clip_bundle", "Read selected clips together with source and date. Keywords: compare clips, comparar recortes.\nPass IDs from clip_recent or clip_search; returns their texts in the requested order with source app, window title and timestamp, ready to compare or summarise in one chat turn. Each text may be truncated; use clip_get with an offset for the rest.\nSinónimos: compara estas copias, resume estos enlaces, junta estos recortes, analiza estos clips.", BundleArgs, _ann(True), run_bundle),
     Tool("clip_set", "Put text on the clipboard and store it as a clip (write). Keywords: cópiame esto, ponlo en el portapapeles.\nPut text on the user's clipboard and store it as a clip (write, idempotent by content). Use when the user says 'cópiame esto' or 'ponlo en el portapapeles'; always tell them plainly what you put there.\nSinónimos: cópiame esto, ponlo en el portapapeles, copia esto, pon esto en el portapapeles, pásame esto al portapapeles.", SetArgs, _ann(False, False, True), run_set),

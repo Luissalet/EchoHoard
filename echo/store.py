@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+from typing import Callable
 
 from .db import Database
 from .detect import detect_kind, detect_sensitive
@@ -44,9 +45,10 @@ def clip_to_dict(row) -> dict:
 
 
 class ClipStore:
-    def __init__(self, db: Database, images_dir: Path):
+    def __init__(self, db: Database, images_dir: Path, ocr_reader: Callable[[bytes], str] | None = None):
         self.db = db
         self.images_dir = images_dir
+        self.ocr_reader = ocr_reader
 
     # ---------- reads ----------
     def get(self, clip_id: int, include_deleted: bool = False) -> dict | None:
@@ -137,6 +139,16 @@ class ClipStore:
     def capture_image(self, png_bytes: bytes, *, width: int, height: int, source_app: str, source_title: str,
                        now: float) -> dict:
         sha = hashlib.sha256(png_bytes).hexdigest()
+        with self.db.lock:
+            existing = self.db.conn.execute(
+                "SELECT id FROM clips WHERE sha256 = ? AND kind = 'image' AND deleted_at IS NULL", (sha,)
+            ).fetchone()
+        ocr = ""
+        if not existing and self.ocr_reader:
+            try:
+                ocr = self.ocr_reader(png_bytes).strip()[:20000]
+            except Exception:
+                pass  # OCR is optional; never lose the image on OCR failure.
         with self.db.transaction() as conn:
             existing = conn.execute(
                 "SELECT id FROM clips WHERE sha256 = ? AND kind = 'image' AND deleted_at IS NULL", (sha,)
@@ -148,12 +160,20 @@ class ClipStore:
                 )
                 return self.get(existing["id"])
             placeholder = f"[imagen {width}×{height}]"
+            sensitive_label = detect_sensitive(ocr, source_title) if ocr else None
+            if not sensitive_label:
+                sensitive_label = next((label for line in ocr.splitlines()
+                                        if (label := detect_sensitive(line, source_title))), None)
+            stored_text = (
+                f"[oculto: {sensitive_label}]" if sensitive_label else
+                f"{placeholder}\n[OCR local derivado]\n{ocr}" if ocr else placeholder
+            )
             cursor = conn.execute(
                 """INSERT INTO clips(kind, text, preview, chars, sha256, source_app, source_title, first_seen_at,
-                   last_seen_at, times, image_width, image_height, image_bytes)
-                   VALUES ('image', ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)""",
-                (placeholder, placeholder, len(placeholder), sha, source_app, source_title, now, now, width, height,
-                 len(png_bytes)),
+                   last_seen_at, times, image_width, image_height, image_bytes, sensitive)
+                   VALUES ('image', ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)""",
+                (stored_text, make_preview(stored_text), len(stored_text), sha, source_app, source_title,
+                 now, now, width, height, len(png_bytes), int(bool(sensitive_label))),
             )
             new_id = cursor.lastrowid
         self.images_dir.mkdir(parents=True, exist_ok=True)

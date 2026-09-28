@@ -8,7 +8,7 @@ Part of the Hoard family (see `faustus-plugin.json`).
 
 ## What it does
 
-- **Clips** = whatever you copy: text, or an image (stored as a PNG file, with an OCR-free placeholder like "[imagen 1254×1254]" for the text). Each clip tracks kind, a one-line preview, the source app/window when known, first/last seen, how many times the same content was copied, pinned, label, tags.
+- **Clips** = whatever you copy: text, or an image stored as a PNG. With optional local OCR, image text becomes searchable and available to Faustus as clearly marked derived text; without OCR, the clip keeps a placeholder like "[imagen 1254×1254]". Each clip tracks kind, a one-line preview, the source app/window when known, first/last seen, how many times the same content was copied, pinned, label, tags.
 - **Dedupe**: copying the same content again bumps `last_seen_at`/`times` on the existing clip instead of creating a new one.
 - **Kind detection**: url, email, path, code, number, image, or plain text — from the content alone (see `echo/detect.py`).
 - **Sensitive content** (privacy first): a clip that looks like a password, an API key/token, a credit card number (Luhn-checked) or an IBAN is flagged `sensitive` and its real content is replaced by a placeholder like `[oculto: contraseña]` **before it ever reaches the database** — not hidden in the UI, never stored. The assistant never receives it, not even partially. A per-app exclusion list (`ECHO_EXCLUDE_APPS`, default `KeePass,1Password,Bitwarden,keepassxc`) skips capture entirely for password managers. A pause switch stops capture (UI + tool).
@@ -49,6 +49,8 @@ Open http://127.0.0.1:5188, go to **Historial** to see and search what you've co
 | `ECHO_RETENTION_DAYS` | `30` | Unpinned clips older than this are purged; `0` keeps forever. |
 | `ECHO_MAX_CLIPS` | `5000` | Cap on unpinned clips; oldest dropped first. |
 | `ECHO_MAX_IMAGE_MB` | `200` | Cap on total image storage; oldest images dropped first. |
+| `ECHO_OCR_ENABLED` | `0` | Set to `1` to run local Tesseract OCR on newly copied images. Requires `tesseract` on PATH; images are still saved if it is unavailable or fails. |
+| `ECHO_OCR_LANG` | `eng` | Tesseract language pack(s), for example `eng+spa`. |
 | `ECHO_EXCLUDE_APPS` | `KeePass,1Password,Bitwarden,keepassxc` | Comma-separated process names never captured. |
 | `ECHO_ALLOWED_HOSTS` | | Extra host names accepted behind a tunnel (see below). |
 

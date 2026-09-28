@@ -46,6 +46,7 @@ class Config:
     retention_days: int = DEFAULT_RETENTION_DAYS
     max_clips: int = DEFAULT_MAX_CLIPS
     max_image_mb: int = DEFAULT_MAX_IMAGE_MB
+    ocr_enabled: bool = False
     exclude_apps: tuple[str, ...] = ()
     allowed_hosts: tuple[str, ...] = ()  # extra Host values (exact or *.suffix) besides localhost
     data_dir_configured: bool = False
@@ -81,6 +82,7 @@ class Config:
             retention_days=_int_env("ECHO_RETENTION_DAYS", DEFAULT_RETENTION_DAYS),
             max_clips=_int_env("ECHO_MAX_CLIPS", DEFAULT_MAX_CLIPS),
             max_image_mb=_int_env("ECHO_MAX_IMAGE_MB", DEFAULT_MAX_IMAGE_MB),
+            ocr_enabled=_env("ECHO_OCR_ENABLED") == "1",
             exclude_apps=parse_exclude_apps(_env("ECHO_EXCLUDE_APPS", DEFAULT_EXCLUDE_APPS)),
             allowed_hosts=parse_allowed_hosts(_env("ECHO_ALLOWED_HOSTS")),
             data_dir_configured=bool(raw_dir),

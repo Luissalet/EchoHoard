@@ -50,7 +50,11 @@ class Services:
         self.token = write_token(config)
         self.db = Database(config.db_path)
         self.settings = SettingsStore(self.db)
-        self.clips = ClipStore(self.db, config.images_dir)
+        if config.ocr_enabled:
+            from .ocr import read_text
+            self.clips = ClipStore(self.db, config.images_dir, ocr_reader=read_text)
+        else:
+            self.clips = ClipStore(self.db, config.images_dir)
         self.search = Search(self.db)
         self.janitor = Janitor(self.clips, config)
         if backend is not None:
@@ -125,6 +129,7 @@ class Services:
 
     # ---------- status ----------
     def status(self) -> dict:
+        from .ocr import available as ocr_available
         return {
             "service": "echo-hoard", "version": __version__, "data_dir": str(self.config.data_dir),
             "watching": self.watcher.running() and not self.watcher.paused,
@@ -139,6 +144,8 @@ class Services:
             "retention_days": self.config.retention_days,
             "max_clips": self.config.max_clips,
             "max_image_mb": self.config.max_image_mb,
+            "ocr_enabled": self.config.ocr_enabled,
+            "ocr_available": ocr_available(),
             "exclude_apps": list(self.config.exclude_apps),
             "started_at": self.started_at,
             "janitor_last_run": self.janitor.last_run,
