@@ -41,7 +41,8 @@ class Services:
         self.settings = SettingsStore(self.db)
         if config.ocr_enabled:
             from .ocr import read_text
-            self.clips = ClipStore(self.db, config.images_dir, ocr_reader=read_text)
+            work_dir = config.data_dir / "tmp" / "ocr"
+            self.clips = ClipStore(self.db, config.images_dir, ocr_reader=lambda png: read_text(png, work_dir=work_dir))
         else:
             self.clips = ClipStore(self.db, config.images_dir)
         self.search = Search(self.db)
