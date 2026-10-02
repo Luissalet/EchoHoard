@@ -4,7 +4,6 @@ Owns the clock, so every timestamp in the app can be pinned in tests."""
 from __future__ import annotations
 
 import logging
-import secrets
 import threading
 import time
 from typing import Callable
@@ -16,23 +15,13 @@ from .config import Config
 from .db import Database
 from .janitor import Janitor
 from .search import Search
+from .hoard_link.tokens import read_or_create_token
 from .store import ClipStore, SettingsStore
 from .watcher import Watcher
 
 log = logging.getLogger("echo")
 
 JANITOR_PERIOD_S = 600  # 10 minutes
-
-
-def write_token(config: Config) -> str:
-    config.data_dir.mkdir(parents=True, exist_ok=True)
-    token = secrets.token_hex(32)
-    config.token_path.write_text(token, encoding="utf-8")
-    try:
-        config.token_path.chmod(0o600)
-    except OSError:
-        pass
-    return token
 
 
 class Services:
@@ -47,7 +36,7 @@ class Services:
         self.started_at = self.clock()
         config.data_dir.mkdir(parents=True, exist_ok=True)
         config.images_dir.mkdir(parents=True, exist_ok=True)
-        self.token = write_token(config)
+        self.token = read_or_create_token(config.token_path)  # stable across restarts: a second instance must not rotate it
         self.db = Database(config.db_path)
         self.settings = SettingsStore(self.db)
         if config.ocr_enabled:

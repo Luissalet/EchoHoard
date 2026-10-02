@@ -49,8 +49,8 @@ Open http://127.0.0.1:5188, go to **Historial** to see and search what you've co
 | `ECHO_RETENTION_DAYS` | `30` | Unpinned clips older than this are purged; `0` keeps forever. |
 | `ECHO_MAX_CLIPS` | `5000` | Cap on unpinned clips; oldest dropped first. |
 | `ECHO_MAX_IMAGE_MB` | `200` | Cap on total image storage; oldest images dropped first. |
-| `ECHO_OCR_ENABLED` | `0` | Set to `1` to run local Tesseract OCR on newly copied images. Requires `tesseract` on PATH; images are still saved if it is unavailable or fails. |
-| `ECHO_OCR_LANG` | `eng` | Tesseract language pack(s), for example `eng+spa`. |
+| `ECHO_OCR_ENABLED` | `0` | Set to `1` to read the text of newly copied images. The family's OCR engine (Kafka's Hoard, through the hub: `fam_docs.ocr_image` from Hoard Link) is used when it is running, otherwise a local Tesseract (PATH, `ECHO_TESSERACT`, or the standard Windows install folders). Images are still saved if neither is available or it fails. |
+| `ECHO_OCR_LANG` | `spa+eng` | Language(s) as Tesseract spells them, for example `eng+spa`; the first one is the language asked of the family service. A missing pack makes the local engine retry with `eng`. |
 | `ECHO_EXCLUDE_APPS` | `KeePass,1Password,Bitwarden,keepassxc` | Comma-separated process names never captured. |
 | `ECHO_ALLOWED_HOSTS` | | Extra host names accepted behind a tunnel (see below). |
 
@@ -62,9 +62,9 @@ Once opened through the tunnel, the browser offers to install it (PWA).
 
 ## API
 
-All JSON; errors are `{ "error": "..." }`.
+All JSON; errors are `{ "error": "..." }` (plus a machine-readable `code`, and `issues` for bad input). Agent-tool answers are capped at about 20 KB (`truncated` says what was cut). The request guard, the error envelope, the PWA files, the single-page-app server (`index.html` is never cached), the MCP bridge, the agent routes, the database class and the search-query builder are the shared Hoard Link commons (`echo/hoard_link/`), not code of this app. A second `python -m echo` reports the running instance and exits without touching the token or the database; the token in `data/mcp-token` is created once and stays.
 
-- `GET /api/health` → `{ service: "echo-hoard", version, dataDirConfigured }`; `GET /api/status`
+- `GET /api/health` → `{ service: "echo-hoard", version, dataDirConfigured, hoard_link }` (the shared `hoard_link.service.health_router`); `GET /api/status`
 - `POST /api/pause`, `POST /api/resume`
 - `GET /api/clips?kind&pinned&since&until&app&limit&offset`, `POST /api/clips` `{text}` (sets the clipboard AND stores it), `GET/PATCH/DELETE /api/clips/{id}`, `POST /api/clips/{id}/restore`, `POST /api/clips/{id}/copy` (put it back on the clipboard), `GET /api/clips/{id}/image`
 - `DELETE /api/clips?before=<iso>` (bulk purge, irreversible; UI confirms)

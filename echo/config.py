@@ -6,7 +6,8 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .guard import parse_allowed_hosts
+from .hoard_link.appconfig import env_flag, env_int, env_str
+from .hoard_link.guard import parse_allowed_hosts
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_PORT = 5188
@@ -16,18 +17,10 @@ DEFAULT_MAX_IMAGE_MB = 200
 DEFAULT_EXCLUDE_APPS = "KeePass,1Password,Bitwarden,keepassxc"
 
 
-def _env(name: str, default: str = "") -> str:
-    return os.environ.get(name, default).strip()
-
-
-def _int_env(name: str, default: int) -> int:
-    raw = _env(name)
-    if not raw:
-        return default
-    try:
-        return int(raw)
-    except ValueError:
-        return default
+def _exclude_raw() -> str:
+    """The exclusion list; set to an empty value it means "exclude nothing" (blank is not "unset" here)."""
+    raw = os.environ.get("ECHO_EXCLUDE_APPS")
+    return DEFAULT_EXCLUDE_APPS if raw is None else raw.strip()
 
 
 def parse_exclude_apps(raw: str) -> tuple[str, ...]:
@@ -65,25 +58,21 @@ class Config:
 
     @classmethod
     def from_env(cls) -> "Config":
-        raw_dir = _env("ECHO_DATA_DIR")
-        port_raw = _env("ECHO_PORT") or _env("PORT") or str(DEFAULT_PORT)
-        try:
-            port = int(port_raw)
-        except ValueError:
-            port = DEFAULT_PORT
+        raw_dir = env_str("ECHO_DATA_DIR")
+        port = env_int("ECHO_PORT", "PORT", default=DEFAULT_PORT)
         if not 1 <= port <= 65535:
             port = DEFAULT_PORT
         return cls(
             data_dir=Path(raw_dir).expanduser() if raw_dir else REPO_ROOT / "data",
             port=port,
-            port_strict=_env("PORT_STRICT") == "1",
-            backend=_env("ECHO_BACKEND", "auto") or "auto",
-            autostart=_env("ECHO_AUTOSTART", "1") != "0",
-            retention_days=_int_env("ECHO_RETENTION_DAYS", DEFAULT_RETENTION_DAYS),
-            max_clips=_int_env("ECHO_MAX_CLIPS", DEFAULT_MAX_CLIPS),
-            max_image_mb=_int_env("ECHO_MAX_IMAGE_MB", DEFAULT_MAX_IMAGE_MB),
-            ocr_enabled=_env("ECHO_OCR_ENABLED") == "1",
-            exclude_apps=parse_exclude_apps(_env("ECHO_EXCLUDE_APPS", DEFAULT_EXCLUDE_APPS)),
-            allowed_hosts=parse_allowed_hosts(_env("ECHO_ALLOWED_HOSTS")),
+            port_strict=env_flag("PORT_STRICT"),
+            backend=env_str("ECHO_BACKEND", default="auto"),
+            autostart=env_flag("ECHO_AUTOSTART", True),
+            retention_days=env_int("ECHO_RETENTION_DAYS", default=DEFAULT_RETENTION_DAYS),
+            max_clips=env_int("ECHO_MAX_CLIPS", default=DEFAULT_MAX_CLIPS),
+            max_image_mb=env_int("ECHO_MAX_IMAGE_MB", default=DEFAULT_MAX_IMAGE_MB),
+            ocr_enabled=env_flag("ECHO_OCR_ENABLED"),
+            exclude_apps=parse_exclude_apps(_exclude_raw()),
+            allowed_hosts=parse_allowed_hosts(env_str("ECHO_ALLOWED_HOSTS")),
             data_dir_configured=bool(raw_dir),
         )

@@ -47,8 +47,8 @@ Abre http://127.0.0.1:5188, entra en **Historial** para ver y buscar lo que has 
 | `ECHO_RETENTION_DAYS` | `30` | Las copias sin fijar más antiguas se purgan; `0` las conserva para siempre. |
 | `ECHO_MAX_CLIPS` | `5000` | Límite de copias sin fijar; se eliminan antes las más antiguas. |
 | `ECHO_MAX_IMAGE_MB` | `200` | Límite de espacio total en imágenes; se eliminan antes las más antiguas. |
-| `ECHO_OCR_ENABLED` | `0` | Pon `1` para reconocer el texto de las imágenes nuevas con Tesseract local. Requiere `tesseract` en PATH; las imágenes se guardan aunque falte o falle. |
-| `ECHO_OCR_LANG` | `eng` | Paquetes de idioma de Tesseract, por ejemplo `eng+spa`. |
+| `ECHO_OCR_ENABLED` | `0` | Pon `1` para reconocer el texto de las imágenes nuevas. Se usa el motor de OCR de la familia (Kafka's Hoard, a través del hub: `fam_docs.ocr_image` de Hoard Link) si está en marcha y, si no, un Tesseract local (PATH, `ECHO_TESSERACT` o las carpetas de instalación habituales de Windows). Las imágenes se guardan aunque ninguno esté disponible o falle. |
+| `ECHO_OCR_LANG` | `spa+eng` | Idioma(s) como los escribe Tesseract, por ejemplo `eng+spa`; el primero es el que se pide al servicio de la familia. Si falta el paquete, el motor local reintenta con `eng`. |
 | `ECHO_EXCLUDE_APPS` | `KeePass,1Password,Bitwarden,keepassxc` | Nombres de proceso, separados por comas, que nunca se capturan. |
 | `ECHO_ALLOWED_HOSTS` | | Nombres de host adicionales aceptados detrás de un túnel. |
 
@@ -57,6 +57,8 @@ Abre http://127.0.0.1:5188, entra en **Historial** para ver y buscar lo que has 
 El servidor escucha en 127.0.0.1 y solo responde a peticiones cuyo `Host` sea `localhost`, `127.0.0.1` o `[::1]`. Para entrar desde el móvil, indicad los nombres de host adicionales en `ECHO_ALLOWED_HOSTS`, separados por comas, exactos o `*.sufijo`: `ECHO_ALLOWED_HOSTS=mi-pc.example,*.ts.net`. Una vez abierta a través del túnel, el navegador ofrece instalarla (PWA).
 
 ## Conectar el asistente (MCP)
+
+El guardia de peticiones, el formato de errores, los ficheros PWA, el servidor de la SPA (sin caché para `index.html`), las rutas del agente, el puente MCP, la clase de base de datos y el constructor de consultas de búsqueda son los comunes de Hoard Link (`echo/hoard_link/`). Un segundo `python -m echo` avisa de que ya está en marcha y sale sin tocar el token ni la base de datos; el token de `data/mcp-token` se crea una vez y no cambia.
 
 `mcp_server.py` es un puente stdio: pide la lista de herramientas a la aplicación en marcha y reenvía cada llamada a `POST /api/agent/call` con el token de `data/mcp-token`. Nunca abre la base de datos. Faustus detecta la aplicación por `/api/health` y rellena la conexión con `faustus-plugin.json`.
 

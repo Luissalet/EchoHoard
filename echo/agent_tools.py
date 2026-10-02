@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any, Callable, Literal
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from .services import Services
+from .hoard_link.agentkit import AppError, Empty, Tool, ann, call_tool as run_tool, tool_catalog as catalog_of
 from .hoard_link.since import resolve_since
+from .services import Services
 
 AGENT_INSTRUCTIONS = """Echo's Hoard is the user's own clipboard history, kept only on their PC.
 It is the user's own data: quote it only when they ask for something they copied, and describe what you actually found rather than paraphrasing.
@@ -17,10 +17,6 @@ clip_set changes what the user will paste next: always say plainly what you just
 When the user gives a time ("in the last hour", "hoy", "esta mañana"), pass it as since ('1h', 'hoy', 'esta mañana') to clip_recent, or to clip_search when they also describe the content, instead of listing a huge n and filtering by eye.
 When the user selects several clip IDs to compare or summarise, use clip_bundle once to get their texts and origins together.
 Never read the data folder or database directly; use these tools only."""
-
-
-class Empty(BaseModel):
-    pass
 
 
 SINCE_FIELD = ("Only clips last seen at or after this: an age like '1h', '30m', 'hace 2 horas', a word "
@@ -74,15 +70,6 @@ class DeleteArgs(BaseModel):
 
 class CaptureArgs(BaseModel):
     action: Literal["pause", "resume"]
-
-
-@dataclass(frozen=True)
-class Tool:
-    name: str
-    description: str
-    input_model: type[BaseModel]
-    annotations: dict[str, bool]
-    run: Callable[[Services, Any], Any]
 
 
 PUBLIC_KEYS = ("id", "kind", "preview", "chars", "source_app", "last_seen_at", "times", "pinned", "label", "tags", "sensitive")
@@ -191,36 +178,34 @@ def run_capture(services: Services, args: CaptureArgs) -> dict:
     return {"ok": True, "watching": s["watching"], "paused": s["paused"]}
 
 
-def _ann(read_only: bool, destructive: bool = False, idempotent: bool | None = None) -> dict[str, bool]:
-    return {"readOnlyHint": read_only, "destructiveHint": destructive, "idempotentHint": read_only if idempotent is None else idempotent, "openWorldHint": False}
-
-
 TOOLS: list[Tool] = [
-    Tool("clip_recent", "Recently copied clips, newest first, optionally since '1h'/'hoy'. Keywords: qué copié, portapapeles.\nThe user's most recently copied clips (newest first): kind, preview, source app, when, how many times copied, pinned, label. A sensitive clip comes back with preview `[oculto]`, never the real content.\nSinónimos: portapapeles, últimas copias, qué he copiado, historial del portapapeles, lo último que copié.", RecentArgs, _ann(True), run_recent),
-    Tool("clip_search", "Search copied text and image OCR. Keywords: buscar copiado, texto en captura.\nFull-text search over clipboard history (text, optional image OCR, label, tags, source window title), diacritics-insensitive. OCR is derived and may contain recognition mistakes. Sensitive clips never surface real content, only `[oculto]`.\nSinónimos: buscar en el portapapeles, texto de imagen copiada, busca la url que copié.", SearchArgs, _ann(True), run_search),
-    Tool("clip_get", "Full text of one clip by id (paginated). Keywords: ver clip, texto completo, contenido copiado.\nThe full text of one clip (paginated with max_chars/offset for very long clips). Refuses outright when the clip is flagged sensitive.\nSinónimos: dame el texto completo, pégame lo que copié, contenido completo de la copia.", GetArgs, _ann(True), run_get),
-    Tool("clip_bundle", "Read selected clips together with source and date. Keywords: compare clips, comparar recortes.\nPass IDs from clip_recent or clip_search; returns their texts in the requested order with source app, window title and timestamp, ready to compare or summarise in one chat turn. Each text may be truncated; use clip_get with an offset for the rest.\nSinónimos: compara estas copias, resume estos enlaces, junta estos recortes, analiza estos clips.", BundleArgs, _ann(True), run_bundle),
-    Tool("clip_set", "Put text on the clipboard and store it as a clip (write). Keywords: cópiame esto, ponlo en el portapapeles.\nPut text on the user's clipboard and store it as a clip (write, idempotent by content). Use when the user says 'cópiame esto' or 'ponlo en el portapapeles'; always tell them plainly what you put there.\nSinónimos: cópiame esto, ponlo en el portapapeles, copia esto, pon esto en el portapapeles, pásame esto al portapapeles.", SetArgs, _ann(False, False, True), run_set),
-    Tool("clip_copy", "Put an existing clip back on the clipboard by id (write). Keywords: vuelve a copiar, recuperar clip.\nPut an existing clip back on the user's clipboard by id (write). Refuses a sensitive clip unless `allow_sensitive` is true, and even then never returns the content to you.\nSinónimos: pégame el anterior, vuelve a copiar esto, copia ese de nuevo, recupera esa copia, ponlo otra vez en el portapapeles.", CopyArgs, _ann(False, False, True), run_copy),
-    Tool("clip_pin", "Pin or unpin a clip and optionally set its label/tags (write). Only when the user asks.\nSinónimos: fija esta copia, guarda esto, marca como favorito, etiqueta esta copia, quita de fijados.", PinArgs, _ann(False, False, True), run_pin),
-    Tool("clip_delete", "Forget one clip (write, destructive; soft-deleted with a 24h undo window before it is purged for good).\nSinónimos: borra esta copia, olvida esto, elimina del portapapeles, quita esta copia.", DeleteArgs, _ann(False, True, True), run_delete),
-    Tool("clip_status", "Is Echo watching the clipboard? Counts, storage and retention. Keywords: estado, portapapeles, retención.\nWhether Echo is watching the clipboard, counts of clips/pinned/sensitive, image storage used, retention configuration.\nSinónimos: estado del portapapeles, está vigilando, cuántas copias tengo, está en pausa.", Empty, _ann(True), run_status),
-    Tool("clip_capture", "Pause or resume clipboard watching (write). Only when the user explicitly asks for it.\nSinónimos: pausa el portapapeles, deja de copiar, reanuda el portapapeles, vuelve a vigilar el portapapeles.", CaptureArgs, _ann(False, False, True), run_capture),
+    Tool("clip_recent", "Recently copied clips, newest first, optionally since '1h'/'hoy'. Keywords: qué copié, portapapeles.\nThe user's most recently copied clips (newest first): kind, preview, source app, when, how many times copied, pinned, label. A sensitive clip comes back with preview `[oculto]`, never the real content.\nSinónimos: portapapeles, últimas copias, qué he copiado, historial del portapapeles, lo último que copié.", RecentArgs, ann(True), run_recent),
+    Tool("clip_search", "Search copied text and image OCR. Keywords: buscar copiado, texto en captura.\nFull-text search over clipboard history (text, optional image OCR, label, tags, source window title), diacritics-insensitive. OCR is derived and may contain recognition mistakes. Sensitive clips never surface real content, only `[oculto]`.\nSinónimos: buscar en el portapapeles, texto de imagen copiada, busca la url que copié.", SearchArgs, ann(True), run_search),
+    Tool("clip_get", "Full text of one clip by id (paginated). Keywords: ver clip, texto completo, contenido copiado.\nThe full text of one clip (paginated with max_chars/offset for very long clips). Refuses outright when the clip is flagged sensitive.\nSinónimos: dame el texto completo, pégame lo que copié, contenido completo de la copia.", GetArgs, ann(True), run_get),
+    Tool("clip_bundle", "Read selected clips together with source and date. Keywords: compare clips, comparar recortes.\nPass IDs from clip_recent or clip_search; returns their texts in the requested order with source app, window title and timestamp, ready to compare or summarise in one chat turn. Each text may be truncated; use clip_get with an offset for the rest.\nSinónimos: compara estas copias, resume estos enlaces, junta estos recortes, analiza estos clips.", BundleArgs, ann(True), run_bundle),
+    Tool("clip_set", "Put text on the clipboard and store it as a clip (write). Keywords: cópiame esto, ponlo en el portapapeles.\nPut text on the user's clipboard and store it as a clip (write, idempotent by content). Use when the user says 'cópiame esto' or 'ponlo en el portapapeles'; always tell them plainly what you put there.\nSinónimos: cópiame esto, ponlo en el portapapeles, copia esto, pon esto en el portapapeles, pásame esto al portapapeles.", SetArgs, ann(False, False, True), run_set),
+    Tool("clip_copy", "Put an existing clip back on the clipboard by id (write). Keywords: vuelve a copiar, recuperar clip.\nPut an existing clip back on the user's clipboard by id (write). Refuses a sensitive clip unless `allow_sensitive` is true, and even then never returns the content to you.\nSinónimos: pégame el anterior, vuelve a copiar esto, copia ese de nuevo, recupera esa copia, ponlo otra vez en el portapapeles.", CopyArgs, ann(False, False, True), run_copy),
+    Tool("clip_pin", "Pin or unpin a clip and optionally set its label/tags (write). Only when the user asks.\nSinónimos: fija esta copia, guarda esto, marca como favorito, etiqueta esta copia, quita de fijados.", PinArgs, ann(False, False, True), run_pin),
+    Tool("clip_delete", "Forget one clip (write, destructive; soft-deleted with a 24h undo window before it is purged for good).\nSinónimos: borra esta copia, olvida esto, elimina del portapapeles, quita esta copia.", DeleteArgs, ann(False, True, True), run_delete),
+    Tool("clip_status", "Is Echo watching the clipboard? Counts, storage and retention. Keywords: estado, portapapeles, retención.\nWhether Echo is watching the clipboard, counts of clips/pinned/sensitive, image storage used, retention configuration.\nSinónimos: estado del portapapeles, está vigilando, cuántas copias tengo, está en pausa.", Empty, ann(True), run_status),
+    Tool("clip_capture", "Pause or resume clipboard watching (write). Only when the user explicitly asks for it.\nSinónimos: pausa el portapapeles, deja de copiar, reanuda el portapapeles, vuelve a vigilar el portapapeles.", CaptureArgs, ann(False, False, True), run_capture),
 ]
 
 TOOLS_BY_NAME = {tool.name: tool for tool in TOOLS}
 
 
 def tool_catalog() -> list[dict]:
-    return [
-        {"name": t.name, "description": t.description, "annotations": t.annotations, "inputSchema": t.input_model.model_json_schema(by_alias=True)}
-        for t in TOOLS
-    ]
+    return catalog_of(TOOLS)
 
 
-def call_tool(services: Services, name: str, arguments: dict | None) -> Any:
-    tool = TOOLS_BY_NAME.get(name)
-    if tool is None:
-        raise KeyError(f"Unknown tool: {name}")
-    args = tool.input_model.model_validate(arguments or {})
-    return tool.run(services, args)
+def call_tool(services: Services, name: str, arguments: dict | None, *, cap: bool = True):
+    """Run one tool. Expected failures keep the statuses Echo always answered with (403 hidden content, 404 no such
+    clip, 400 bad input); the shared agent kit validates the arguments and caps the size of the answer."""
+    try:
+        return run_tool(TOOLS_BY_NAME, services, name, arguments, cap=cap)
+    except PermissionError as error:
+        raise AppError("forbidden", str(error), status=403) from error
+    except LookupError as error:
+        if isinstance(error, KeyError):  # an unknown tool: the router answers 404 unknown_tool itself
+            raise
+        raise AppError("not_found", str(error), status=404) from error
