@@ -43,3 +43,20 @@ def test_search_never_surfaces_sensitive_content(services):
     assert len(hits2) == 1
     assert hits2[0]["sensitive"] is True
     assert "sk-" not in hits2[0]["snippet"]
+
+
+def test_search_text_that_looks_like_fts_syntax_is_just_words(services):
+    """The old builder left terms unquoted: a copied `NEAR(`, a stray quote or `-x` made the MATCH fail and the search came back empty."""
+    services.clips.capture_text("el comando git log -n 5 --oneline", source_app="terminal", source_title="", now=services.now())
+    services.clips.capture_text('cadena "entre comillas" AND otra', source_app="editor", source_title="", now=services.now())
+    for hostile in ('NEAR(', '"', 'a OR', '-n', 'git AND', '*', 'col:valor', '(((', "'; DROP TABLE clips; --"):
+        assert isinstance(services.search.search(hostile), list)
+    assert any("git log" in h["preview"] for h in services.search.search("git log -n"))
+    assert any("entre comillas" in h["preview"] for h in services.search.search('"entre comillas" AND'))
+
+
+def test_search_falls_back_to_any_word_when_not_all_match(services):
+    seed(services)
+    hits = services.search.search("valdeniebla receta")  # nothing contains both words, two clips contain the first
+    assert len(hits) == 2 and all("aldeniebla" in h["preview"] for h in hits)
+    assert services.search.search("inexistente receta") == []

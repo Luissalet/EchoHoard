@@ -8,19 +8,20 @@ so a search can never surface real hidden content.
 from __future__ import annotations
 
 import json
-import re
 
 from .db import Database
+from .hoard_link.docs.textsearch import fts_query
 
-TOKEN_RE = re.compile(r"[\w]+", re.UNICODE)
 
-
-def _fts_query(q: str) -> str:
-    """Turn free text into an FTS5 MATCH expression: every term is a prefix match, AND'ed."""
-    terms = TOKEN_RE.findall(q)
-    if not terms:
-        return '""'
-    return " AND ".join(f"{t}*" for t in terms)
+def match_ladder(q: str) -> list[str]:
+    """MATCH expressions to try in order until one returns rows: every word as a prefix, AND'ed (what Echo always did,
+    now with each word quoted so `AND`, `NEAR`, `-` or `"` in a copied text are plain words), then any of the words."""
+    ladder: list[str] = []
+    for mode in ("prefix", "or"):
+        expr = fts_query(q, mode=mode)
+        if expr and expr not in ladder:
+            ladder.append(expr)
+    return ladder
 
 
 class Search:
@@ -37,29 +38,33 @@ class Search:
             FROM clips_fts JOIN clips c ON c.id = clips_fts.rowid
             WHERE clips_fts MATCH ? AND c.deleted_at IS NULL
         """
-        params: list = [_fts_query(q)]
+        filters: list = []
         if kind is not None:
             sql += " AND c.kind = ?"
-            params.append(kind)
+            filters.append(kind)
         if pinned is not None:
             sql += " AND c.pinned = ?"
-            params.append(1 if pinned else 0)
+            filters.append(1 if pinned else 0)
         if since is not None:
             sql += " AND c.last_seen_at >= ?"
-            params.append(since)
+            filters.append(since)
         if until is not None:
             sql += " AND c.last_seen_at <= ?"
-            params.append(until)
+            filters.append(until)
         if source_app:
             sql += " AND c.source_app = ?"
-            params.append(source_app)
+            filters.append(source_app)
         sql += " ORDER BY rank LIMIT ?"
-        params.append(limit)
+        filters.append(limit)
+        rows: list = []
         with self.db.lock:
-            try:
-                rows = self.db.conn.execute(sql, params).fetchall()
-            except Exception:
-                return []
+            for expression in match_ladder(q):
+                try:
+                    rows = self.db.conn.execute(sql, [expression, *filters]).fetchall()
+                except Exception:
+                    rows = []
+                if rows:
+                    break
         out = []
         for row in rows:
             out.append({
