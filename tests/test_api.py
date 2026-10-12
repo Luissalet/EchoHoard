@@ -212,3 +212,33 @@ def test_agent_since_accepts_human_windows(client):
     assert call("clip_search", {"q": "momento", "since": "hoy"}).json()["count"] >= 1
     bad = call("clip_recent", {"since": "cuando sea"})
     assert bad.status_code == 400 and "since accepts" in bad.text
+
+
+def test_patch_merges_only_the_provided_fields(client):
+    """A save sends just the fields the user changed, so an edit made meanwhile by the assistant survives."""
+    clip_id = client.post("/api/clips", json={"text": "Merge me"}).json()["id"]
+    client.patch(f"/api/clips/{clip_id}", json={"label": "uno", "tags": ["a", "b"], "pinned": True})
+
+    only_label = client.patch(f"/api/clips/{clip_id}", json={"label": "dos"}).json()
+    assert only_label["label"] == "dos" and only_label["tags"] == ["a", "b"] and only_label["pinned"] is True
+
+    only_pin = client.patch(f"/api/clips/{clip_id}", json={"pinned": False}).json()
+    assert only_pin["pinned"] is False and only_pin["label"] == "dos" and only_pin["tags"] == ["a", "b"]
+
+    cleared = client.patch(f"/api/clips/{clip_id}", json={"label": ""}).json()
+    assert cleared["label"] == "" and cleared["tags"] == ["a", "b"]
+
+    emptied = client.patch(f"/api/clips/{clip_id}", json={"tags": []}).json()
+    assert emptied["tags"] == [] and emptied["label"] == ""
+
+    untouched = client.patch(f"/api/clips/{clip_id}", json={}).json()
+    assert untouched["label"] == "" and untouched["tags"] == [] and untouched["pinned"] is False
+    assert untouched["text"] == "Merge me"
+
+
+def test_patch_ignores_null_and_unknown_fields(client):
+    clip_id = client.post("/api/clips", json={"text": "Keep"}).json()["id"]
+    client.patch(f"/api/clips/{clip_id}", json={"label": "keep", "pinned": True})
+    after = client.patch(f"/api/clips/{clip_id}", json={"label": None, "pinned": None, "text": "hacked"}).json()
+    assert after["label"] == "keep" and after["pinned"] is True and after["text"] == "Keep"
+    assert client.patch("/api/clips/99999", json={"label": "x"}).status_code == 404
