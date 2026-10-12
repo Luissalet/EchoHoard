@@ -30,5 +30,6 @@
     "env": { "ECHO_URL": "{APP_URL}", "ECHO_TOKEN_FILE": "{TOKEN_FILE}" },
     "optional_env": []
   },
+  "x-family": { "copilot": true },
   "notes": "Keep the app running (python -m echo) while the assistant uses it: the MCP bridge proxies every call to the local server and never opens the database. Sensitive clips (passwords, tokens, cards, IBANs) are never sent to the assistant."
 }
