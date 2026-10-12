@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api.js";
+import { changedFields, clipPatch, rebaseForm, setRefreshHandler, setViewState } from "../copilot-context.js";
 import { useApp } from "../App.jsx";
 import { Chip, Empty, PageHeader } from "../components/ui.jsx";
 import { KIND_LABEL, KIND_CHIP, when, dayKey } from "../format.js";
@@ -32,6 +33,31 @@ function LockIcon() {
 function ClipRow({ clip, onCopy, onPin, onDelete, onLabel }) {
   const [editing, setEditing] = useState(false);
   const [label, setLabel] = useState(clip.label || "");
+  // What the field was loaded with: a reload that changes the label (an assistant edit) only moves an untouched field.
+  const baseRef = useRef({ label: clip.label || "" });
+  const labelRef = useRef(label);
+  labelRef.current = label;
+  useEffect(() => {
+    const next = { label: clip.label || "" };
+    const merged = rebaseForm(baseRef.current, next, { label: labelRef.current });
+    baseRef.current = next;
+    if (merged.label !== labelRef.current) setLabel(merged.label);
+  }, [clip.label]);
+  // The open label editor answers the copilot context request with what has been typed.
+  useEffect(() => {
+    if (!editing) return undefined;
+    const onRequest = (e) => e.detail?.provide?.({
+      kind: "clip-label", object_id: String(clip.id), dirty: labelRef.current !== baseRef.current.label, fields: { label: labelRef.current },
+    });
+    window.addEventListener("echo:context-request", onRequest);
+    return () => window.removeEventListener("echo:context-request", onRequest);
+  }, [editing, clip.id]);
+  // Saving sends only what changed from the loaded label, so an assistant edit made meanwhile is not overwritten.
+  const save = () => {
+    setEditing(false);
+    const patch = clipPatch(changedFields(baseRef.current, { label: labelRef.current }));
+    if ("label" in patch) onLabel(clip.id, patch.label);
+  };
 
   if (clip.sensitive) {
     return (
@@ -63,8 +89,8 @@ function ClipRow({ clip, onCopy, onPin, onDelete, onLabel }) {
           value={label}
           autoFocus
           onChange={(e) => setLabel(e.target.value)}
-          onBlur={() => { setEditing(false); onLabel(clip.id, label); }}
-          onKeyDown={(e) => { if (e.key === "Enter") { setEditing(false); onLabel(clip.id, label); } }}
+          onBlur={save}
+          onKeyDown={(e) => { if (e.key === "Enter") save(); }}
         />
       ) : (
         <button type="button" className="btn btn-sm" onClick={() => setEditing(true)}>Etiquetar</button>
@@ -96,6 +122,12 @@ export default function Historial() {
     const timer = setInterval(refresh, 4000);
     return () => clearInterval(timer);
   }, [refresh]);
+  useEffect(() => setRefreshHandler(refresh), [refresh]);
+  useEffect(() => setViewState({
+    page: "history",
+    filters: { ...(kind ? { kind } : {}), ...(q.trim() ? { q: q.trim() } : {}) },
+    ids: clips.filter((c) => !c.sensitive).map((c) => c.id),
+  }), [kind, q, clips]);
 
   async function copy(id) {
     await act(() => api.copyClip(id), "Copiado.");

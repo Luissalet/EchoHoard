@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { api } from "../api.js";
+import { setRefreshHandler } from "../copilot-context.js";
 import { useApp } from "../App.jsx";
 import { PageHeader, StatTile, Switch } from "../components/ui.jsx";
 import { bytes, when } from "../format.js";
@@ -17,6 +18,7 @@ export default function Estado() {
     const timer = setInterval(refresh, 5000);
     return () => clearInterval(timer);
   }, [refresh]);
+  useEffect(() => setRefreshHandler(refresh), [refresh]);
 
   async function togglePause() {
     await act(() => (status.paused ? api.resume() : api.pause()), status.paused ? "Vigilando el portapapeles de nuevo." : "Portapapeles en pausa.");

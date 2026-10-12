@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { api } from "../api.js";
+import { setRefreshHandler, setViewState } from "../copilot-context.js";
 import { useApp } from "../App.jsx";
 import { Chip, Empty, PageHeader } from "../components/ui.jsx";
 import { KIND_LABEL, KIND_CHIP, when } from "../format.js";
@@ -16,6 +17,8 @@ export default function Fijados() {
   useEffect(() => {
     refresh();
   }, [refresh]);
+  useEffect(() => setRefreshHandler(refresh), [refresh]);
+  useEffect(() => setViewState({ page: "pinned", ids: clips.filter((c) => !c.sensitive).map((c) => c.id) }), [clips]);
 
   async function copy(id) {
     await act(() => api.copyClip(id), "Copiado.");

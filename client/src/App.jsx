@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { api } from "./api.js";
+import { setRefreshHandler } from "./copilot-context.js";
 import { Toast } from "./components/ui.jsx";
 import Historial from "./pages/Historial.jsx";
 import Fijados from "./pages/Fijados.jsx";
@@ -56,6 +57,7 @@ export default function App() {
     const timer = setInterval(refreshStatus, 5000);
     return () => clearInterval(timer);
   }, [refreshStatus]);
+  useEffect(() => setRefreshHandler(refreshStatus), [refreshStatus]);
 
   const notify = useCallback((message) => setToast(message), []);
   const act = useCallback(
