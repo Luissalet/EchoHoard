@@ -56,6 +56,16 @@ Abre http://127.0.0.1:5188, entra en **Historial** para ver y buscar lo que has 
 
 El servidor escucha en 127.0.0.1 y solo responde a peticiones cuyo `Host` sea `localhost`, `127.0.0.1` o `[::1]`. Para entrar desde el móvil, indicad los nombres de host adicionales en `ECHO_ALLOWED_HOSTS`, separados por comas, exactos o `*.sufijo`: `ECHO_ALLOWED_HOSTS=mi-pc.example,*.ts.net`. Una vez abierta a través del túnel, el navegador ofrece instalarla (PWA).
 
+## Asistente de Faustus
+
+Con el lanzador compartido de Hoard Link instalado, la app muestra el panel de Faustus de la familia (un botón flotante). La conversación, el modelo y las herramientas viven en Faustus; esta app solo le dice al panel qué hay abierto.
+
+- **Contexto por vista.** La vista indica la página (`history`, `pinned`, `status`), los filtros activos (`kind`, texto de búsqueda) y los ids de los clips en pantalla (hasta 20). Un clip cuya etiqueta se está editando se envía como `clip` con su id real, tipo, aplicación de origen, última vez visto, veces, fijado, etiqueta, etiquetas, tamaño y una vista previa de 200 caracteres como máximo. El texto completo del clip nunca se envía, y los clips sensibles o borrados quedan fuera por completo, también de los ids visibles. Si no se edita ningún clip, no se envía ningún objeto.
+- **Campos sin guardar.** El panel los pide con el evento de ventana `echo:context-request`. El editor de etiqueta abierto (`clip-label`) responde con la etiqueta escrita hasta ahora y una marca `dirty`.
+- **Refresco.** Cuando el asistente termina un turno, la vista abierta se recarga en el sitio (`hoard:copilot-turn-end` / `window.hoardCopilot.onTurnEnd`, unidos en una sola recarga). Una etiqueta que estás escribiendo conserva tu texto; una sin tocar sigue al valor nuevo.
+- **Guardado.** El editor de etiqueta envía solo el campo cambiado en `PATCH /api/clips/{id}`, que fusiona solo los campos que lleva (`null` y los campos desconocidos se ignoran; una etiqueta vacía la borra).
+- **Pruebas.** `node --test client/copilot-context.test.mjs` y `venv\Scripts\python -m pytest -q tests/test_api.py`.
+
 ## Conectar el asistente (MCP)
 
 El guardia de peticiones, el formato de errores, los ficheros PWA, el servidor de la SPA (sin caché para `index.html`), las rutas del agente, el puente MCP, la clase de base de datos y el constructor de consultas de búsqueda son los comunes de Hoard Link (`echo/hoard_link/`). Un segundo `python -m echo` avisa de que ya está en marcha y sale sin tocar el token ni la base de datos; el token de `data/mcp-token` se crea una vez y no cambia.

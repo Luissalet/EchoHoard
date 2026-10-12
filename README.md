@@ -71,6 +71,16 @@ All JSON; errors are `{ "error": "..." }` (plus a machine-readable `code`, and `
 - `GET /api/search?q&kind&pinned&since&until&app&limit`
 - `GET /api/agent/tools` (catalog + instructions), `POST /api/agent/call` (Bearer token from `data/mcp-token`)
 
+## Faustus assistant
+
+Once the shared Hoard Link launcher is installed, the app shows the family's Faustus panel (a floating button). The conversation, the model and the tools live in Faustus; this app only tells the panel what is open.
+
+- **Context per view.** The view reports the page (`history`, `pinned`, `status`), the active filters (`kind`, search text) and the ids of the clips on screen (up to 20). A clip whose label is being edited is sent as kind `clip` with its real id, clip kind, source app, last seen, times, pinned, label, tags, size and a preview of at most 200 characters. The full clip text is never sent, and sensitive or deleted clips are left out entirely, also from the visible ids. Nothing is sent as an object where no clip is being edited.
+- **Unsaved fields.** The panel asks for them with the `echo:context-request` window event. The open label editor (`clip-label`) answers with the label typed so far and a `dirty` flag.
+- **Refresh.** When the assistant finishes a turn the open view reloads in place (`hoard:copilot-turn-end` / `window.hoardCopilot.onTurnEnd`, merged into one reload). A label you are typing keeps your text; an untouched one follows the new value.
+- **Saving.** The label editor sends only the changed field in `PATCH /api/clips/{id}`, which merges just the fields it carries (`null` and unknown fields are ignored, an empty label clears it).
+- **Tests.** `node --test client/copilot-context.test.mjs` and `venv\Scripts\python -m pytest -q tests/test_api.py`.
+
 ## MCP tools
 
 `mcp_server.py` is a stdio bridge: it fetches the tool list from the running app and proxies every call to `POST /api/agent/call` with the token from `<DATA_DIR>/mcp-token`. It never opens the database. Env: `ECHO_URL`, `ECHO_TOKEN_FILE` (or `ECHO_TOKEN`).
